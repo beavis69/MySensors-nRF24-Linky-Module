@@ -2,7 +2,7 @@
 #include "tic_reader.h"
 
 #ifndef CONFIG_TIC_DEBUG_ENABLED
-#define CONFIG_TIC_DEBUG_ENABLED 0  //!< Set this to 1 to turn on verbose debugging.
+#define CONFIG_TIC_DEBUG_ENABLED 0 //!< Set this to 1 to turn on verbose debugging.
 #endif
 #if CONFIG_TIC_DEBUG_ENABLED
 #ifndef CONFIG_TIC_DEBUG_FUNCTION
@@ -11,6 +11,15 @@
 #else
 #define CONFIG_TIC_DEBUG_FUNCTION(x)
 #endif
+
+// datasets we want
+                    // S_INFO       (V_TEXT)    ADSC
+                    // S_MULTIMETER (V_CURRENT) IRMS1
+                    // S_MULTIMETER (V_CURRENT) URMS1
+                    // S_POWER      (V_WATT)    SINSTS
+                    // S_POWER      (V_KWH)     EAST
+const uint8_t nb_wanted = 5;
+const char* wanted[nb_wanted] {"ADSC","IRMS1","URMS1","SINSTS","EAST"};
 
 /**
  * @brief
@@ -35,6 +44,8 @@ int tic_reader::setup(Stream &uart) {
  * @return
  */
 int tic_reader::read(struct tic_dataset &dataset) {
+    static uint8_t splitter_count;
+    static uint8_t splitter_pos[3] = {0,0,0};
 
     /* Ensure setup has been performed */
     if (m_stream == NULL) {
@@ -82,6 +93,7 @@ int tic_reader::read(struct tic_dataset &dataset) {
                     CONFIG_TIC_DEBUG_FUNCTION(" [i] Dataset start");
                     m_dataset_buffer_index = 0;
                     m_sm = STATE_2;
+                    splitter_count = 0;
                 } else if (rx == 0x03) {  // Frame stop
                     CONFIG_TIC_DEBUG_FUNCTION(" [i] Frame stop");
                     m_sm = STATE_0;
@@ -99,25 +111,24 @@ int tic_reader::read(struct tic_dataset &dataset) {
                  * move on to processing the other parts of the dataset */
                 if (rx == 0x09) {
                     CONFIG_TIC_DEBUG_FUNCTION(" [i] split char");
-                    m_dataset_buffer[m_dataset_buffer_index] = '\0';
-                    // S_INFO       (V_TEXT)    ADSC
-                    // S_MULTIMETER (V_CURRENT) IRMS1
-                    // S_MULTIMETER (V_CURRENT) URMS1
-                    // S_POWER      (V_WATT)    SINSTS
-                    // S_POWER      (V_KWH)     EAST
-                    if (strcmp_P(m_dataset_buffer, PSTR("ADSC"))   != 0 &&
-                        strcmp_P(m_dataset_buffer, PSTR("IRMS1"))  != 0 &&
-                        strcmp_P(m_dataset_buffer, PSTR("URMS1"))  != 0 &&
-                        strcmp_P(m_dataset_buffer, PSTR("SINSTS")) != 0 &&
-                        strcmp_P(m_dataset_buffer, PSTR("EAST"))   != 0) {
+                    m_dataset_buffer[m_dataset_buffer_index] = '\0'; // terminate string to use strcmp
+                    m_sm = STATE_SKIP;
+                    for (uint8_t i = 0; i < nb_wanted; i++) {
+                      // wanted ?
+                      if (strcmp(m_dataset_buffer, wanted[i]) == 0) {
+                        // memorize splitter count/pos
+                        splitter_pos[splitter_count] = m_dataset_buffer_index;
+                        splitter_count++;
+                        m_dataset_buffer_index++;
+                        m_sm = STATE_3;
+                        break;
+                      }
+                    }
+                    // not wanted
+                    if(m_sm == STATE_SKIP) {
                       CONFIG_TIC_DEBUG_FUNCTION(" [i] skip");
                       m_dataset_buffer_index=0;
-                      m_sm = STATE_SKIP;
-                    } else {
-                      m_dataset_buffer[m_dataset_buffer_index] = rx;
-                      m_dataset_buffer_index++;
-                      // m_splitter_char = (char)rx;
-                      m_sm = STATE_3;
+                      splitter_count=0;
                     }
                 }
                 /* Otherwise, keep appending */
@@ -152,7 +163,11 @@ int tic_reader::read(struct tic_dataset &dataset) {
                     uint8_t checksum_received = m_dataset_buffer[m_dataset_buffer_index - 1];
                     uint8_t checksum_computed = 0x00;
                     for (uint8_t i = 0; i < m_dataset_buffer_index - 1; i++) {
-                        checksum_computed += m_dataset_buffer[i];
+                        if(m_dataset_buffer[i] == 0) {
+                          checksum_computed += 0x09;
+                        } else {
+                          checksum_computed += m_dataset_buffer[i];
+                        }
                     }
                     checksum_computed = (checksum_computed & 0x3F) + 0x20;
                     if (checksum_computed != checksum_received) {
@@ -160,40 +175,14 @@ int tic_reader::read(struct tic_dataset &dataset) {
                         m_sm = STATE_0;
                         return -EIO;
                     }
-
-                    /* Count number of splitters in buffer,
-                     * and while we are at it, replace splitters by null chars to make string processing easier */
-                    uint8_t splitter_pos[3] = {0};
-                    uint8_t splitter_count = 0;
-                    for (uint8_t i = 0; i < m_dataset_buffer_index - 1; i++) {
-                        if (m_dataset_buffer[i] == 0x09) { //m_splitter_char) {
-                            if (splitter_count < 3) {
-                                splitter_pos[splitter_count] = i;
-                                m_dataset_buffer[i] = '\0';
-                            }
-                            splitter_count++;
-                        }
-                    }
-
+                    
                     /* Fill dataset struct and move on */
-                    if (splitter_count == 2) {
-                        uint8_t data_pos = splitter_pos[0] + 1;
+                    if (splitter_count == 2 || splitter_count == 3) {
+                        uint8_t data_pos = splitter_pos[splitter_count-2] + 1;
                         uint8_t name_length = min(TIC_PARSER_DATASET_NAME_LENGTH_MAX, splitter_pos[0]);
-                        uint8_t data_length = min(TIC_PARSER_DATASET_DATA_LENGTH_MAX, splitter_pos[1] - (splitter_pos[0] + 1));
-                        strncpy(dataset.name, (char *)(&m_dataset_buffer[0]), name_length);
-                        strncpy(dataset.data, (char *)(&m_dataset_buffer[data_pos]), data_length);
-                        dataset.name[name_length] = '\0';
-                        dataset.time[0] = '\0';
-                        dataset.data[data_length] = '\0';
-                        CONFIG_TIC_DEBUG_FUNCTION(" [i] Dataset 2 splits ");
-                        m_sm = STATE_1;
-                        return 1;
-                    } else if (splitter_count == 3) {
                         //uint8_t time_pos = splitter_pos[0] + 1;
-                        uint8_t data_pos = splitter_pos[1] + 1;
-                        uint8_t name_length = min(TIC_PARSER_DATASET_NAME_LENGTH_MAX, splitter_pos[0]);
                         //uint8_t time_length = min(TIC_PARSER_DATASET_TIME_LENGTH_MAX, splitter_pos[1] - (splitter_pos[0] + 1));
-                        uint8_t data_length = min(TIC_PARSER_DATASET_DATA_LENGTH_MAX, splitter_pos[2] - (splitter_pos[1] + 1));
+                        uint8_t data_length = min(TIC_PARSER_DATASET_DATA_LENGTH_MAX, splitter_pos[splitter_count-1] - (data_pos));
                         strncpy(dataset.name, (char *)(&m_dataset_buffer[0]), name_length);
                         //strncpy(dataset.time, (char *)(&m_dataset_buffer[time_pos]), time_length);
                         strncpy(dataset.data, (char *)(&m_dataset_buffer[data_pos]), data_length);
@@ -201,8 +190,9 @@ int tic_reader::read(struct tic_dataset &dataset) {
                         //dataset.time[time_length] = '\0';
                         dataset.time[0] = '\0';
                         dataset.data[data_length] = '\0';
-                        CONFIG_TIC_DEBUG_FUNCTION(" [i] Dataset 3 splits ");
+                        CONFIG_TIC_DEBUG_FUNCTION(" [i] Dataset ok");
                         m_sm = STATE_1;
+                        splitter_count=0;
                         return 1;
                     } else {
                         CONFIG_TIC_DEBUG_FUNCTION(" [e] Invalid splitter count!");
@@ -218,7 +208,17 @@ int tic_reader::read(struct tic_dataset &dataset) {
                         CONFIG_TIC_DEBUG_FUNCTION(" [e] Dataset content too long!");
                         m_sm = STATE_0;
                     } else {
-                        m_dataset_buffer[m_dataset_buffer_index] = rx;
+                        // if its a split replace split with \0 to terminate string
+                        if (rx == 0x09) {
+                            CONFIG_TIC_DEBUG_FUNCTION(" [i] split char");
+                            if(splitter_count <3 ) {
+                              splitter_pos[splitter_count] = m_dataset_buffer_index;
+                            }
+                            splitter_count++;
+                            m_dataset_buffer[m_dataset_buffer_index] = '\0';
+                        } else {
+                          m_dataset_buffer[m_dataset_buffer_index] = rx;
+                        }
                         m_dataset_buffer_index++;
                     }
                 }
