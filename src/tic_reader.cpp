@@ -19,7 +19,13 @@
                     // S_POWER      (V_WATT)    SINSTS
                     // S_POWER      (V_KWH)     EAST
 const uint8_t nb_wanted = 5;
-const char* wanted[nb_wanted] {"ADSC","IRMS1","URMS1","SINSTS","EAST"};
+const char* wanted[nb_wanted] {
+  "ADSC",
+  "IRMS1",
+  "URMS1",
+  "SINSTS",
+  "EAST",
+};
 
 /**
  * @brief
@@ -128,7 +134,7 @@ int tic_reader::read(struct tic_dataset &dataset) {
                     if(m_sm == STATE_SKIP) {
                       CONFIG_TIC_DEBUG_FUNCTION(" [i] skip");
                       m_dataset_buffer_index=0;
-                      splitter_count=0;
+                      //splitter_count=0;
                     }
                 }
                 /* Otherwise, keep appending */
