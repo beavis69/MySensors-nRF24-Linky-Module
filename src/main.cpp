@@ -122,25 +122,25 @@ void presentation(void) {
                 break;
             }
             case SENSOR_5_LAST_H: {
-                if (present(SENSOR_4_TOTAL, S_POWER, F("TIC Energy last hour")) == true) {  // V_KWH CCASN
+                if (present(SENSOR_5_LAST_H, S_POWER, F("TIC Energy last hour")) == true) {  // V_KWH CCASN
                     step++;
                 }
                 break;
             }
             case SENSOR_6_POWER_MAX: {
-                if (present(SENSOR_4_TOTAL, S_POWER, F("TIC Apparent Power Max")) == true) {  // V_VA SMAXSN
+                if (present(SENSOR_6_POWER_MAX, S_POWER, F("TIC Apparent Power Max")) == true) {  // V_VA SMAXSN
                     step++;
                 }
                 break;
             }
             case SENSOR_7_POWER_IN: {
-                if (present(SENSOR_4_TOTAL, S_POWER, F("TIC Apparent Power Injected")) == true) {  // V_VA SINSTI
+                if (present(SENSOR_7_POWER_IN, S_POWER, F("TIC Apparent Power Injected")) == true) {  // V_VA SINSTI
                     step++;
                 }
                 break;
             }
             case SENSOR_8_POWER_IN_MAX: {
-                if (present(SENSOR_4_TOTAL, S_POWER, F("TIC Apparent Power Injected Max")) == true) {  // V_VA SMAXSI
+                if (present(SENSOR_8_POWER_IN_MAX, S_POWER, F("TIC Apparent Power Injected Max")) == true) {  // V_VA SMAXSI
                     step++;
                 }
                 break;
@@ -268,6 +268,17 @@ void loop(void) {
 
     /* Tic reading task */
     {
+        static uint32_t timestamp = 0;
+        static char serial_[12 + 1];
+        static uint8_t current_ = 0;
+        static uint16_t voltage_  = 0;
+        static uint16_t ap_ = 0;
+        static uint32_t power_ = 0;
+        static uint16_t powerlh_ = 0;
+        static uint16_t apmax_ = 0;
+        static uint16_t apin_ = 0;
+        static uint16_t apinmax_ = 0;
+
         static enum {
             STATE_0,
             STATE_1,
@@ -298,10 +309,26 @@ void loop(void) {
 
                 Serial.printf(" [d] Received dataset %s = %s\r\n", dataset.name, dataset.data);
                 m_tic_state = STATE_VALID;
+                // force refresh every 30 minutes
+                if( millis() - timestamp >= 1800000) {
+                  timestamp = millis();
+                  serial_[0] = '\0';
+                  current_ = 0;
+                  voltage_  = 0;
+                  ap_ = 0;
+                  power_ = 0;
+                  powerlh_ = 0;
+                  apmax_ = 0;
+                  apin_ = 65535;
+                  apinmax_ = 65535;
+                }
+                // handle millis overflow
+                if(timestamp >= (4294967295 - 1800000)) {
+                  timestamp += 1800000;
+                }
 
                 /* Serial */
                 if (strcmp_P(dataset.name, PSTR("ADSC")) == 0) {
-                    static char serial_[12 + 1];
                     if (strcmp(dataset.data, serial_) != 0) {
                         MyMessage message(SENSOR_0_SERIAL, V_TEXT);
                         if (send(message.set(dataset.data)) == true) {
@@ -312,7 +339,6 @@ void loop(void) {
 
                 /* Current */
                 else if (strcmp_P(dataset.name, PSTR("IRMS1")) == 0) {
-                    static uint8_t current_ = 0;
                     uint8_t value = strtoul(dataset.data, NULL, 10);
                     if (value != current_) {
                         MyMessage message(SENSOR_1_CURRENT, V_CURRENT);
@@ -324,7 +350,6 @@ void loop(void) {
 
                 /* Voltage */
                 else if (strcmp_P(dataset.name, PSTR("URMS1")) == 0) {
-                    static uint16_t voltage_  = 0;
                     uint16_t value = strtoul(dataset.data, NULL, 10);
                     if (value != voltage_) {
                         MyMessage message(SENSOR_2_VOLTAGE, V_VOLTAGE);
@@ -336,7 +361,6 @@ void loop(void) {
 
                 /* Apparent Power */
                 else if (strcmp_P(dataset.name, PSTR("SINSTS")) == 0) {
-                    static uint16_t ap_ = 0;
                     uint16_t value = strtoul(dataset.data, NULL, 10);
                     if (value != ap_) {
                         MyMessage message(SENSOR_3_POWER, V_VA);
@@ -347,7 +371,6 @@ void loop(void) {
                 }
                 /* Energy total */
                 else if (strcmp_P(dataset.name, PSTR("EAST")) == 0) {
-                    static uint32_t power_ = 0;
                     uint32_t value = strtoul(dataset.data, NULL, 10);
                     if (value > power_) {
                         MyMessage message(SENSOR_4_TOTAL, V_KWH);
@@ -358,7 +381,6 @@ void loop(void) {
                 }
                 /* Energy last hour */
                 else if (strcmp_P(dataset.name, PSTR("CCASN")) == 0) {
-                    static uint16_t powerlh_ = 0;
                     uint16_t value = strtoul(dataset.data, NULL, 10);
                     if (value > powerlh_) {
                         MyMessage message(SENSOR_5_LAST_H, V_KWH);
@@ -369,7 +391,6 @@ void loop(void) {
                 }
                 /* Apparent Power Max */
                 else if (strcmp_P(dataset.name, PSTR("SMAXSN")) == 0) {
-                    static uint16_t apmax_ = 0;
                     uint16_t value = strtoul(dataset.data, NULL, 10);
                     if (value != apmax_) {
                         MyMessage message(SENSOR_6_POWER_MAX, V_VA);
@@ -380,7 +401,6 @@ void loop(void) {
                 }
                 /* Apparent Power Injected */
                 else if (strcmp_P(dataset.name, PSTR("SINSTI")) == 0) {
-                    static uint16_t apin_ = 0;
                     uint16_t value = strtoul(dataset.data, NULL, 10);
                     if (value != apin_) {
                         MyMessage message(SENSOR_7_POWER_IN, V_VA);
@@ -391,7 +411,6 @@ void loop(void) {
                 }
                 /* Apparent Power Injected Max */
                 else if (strcmp_P(dataset.name, PSTR("SMAXSI")) == 0) {
-                    static uint16_t apinmax_ = 0;
                     uint16_t value = strtoul(dataset.data, NULL, 10);
                     if (value != apinmax_) {
                         MyMessage message(SENSOR_8_POWER_IN_MAX, V_VA);
