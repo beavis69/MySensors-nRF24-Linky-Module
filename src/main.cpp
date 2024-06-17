@@ -11,6 +11,10 @@
 #include <ctype.h>
 #include <stdlib.h>
 
+
+// define force refresh period
+#define PERIOD 1800000
+
 /* Working variables */
 static SoftwareSerial m_tic_port(CONFIG_TIC_DATA_PIN, CONFIG_TIC_DUMMY_PIN);
 static tic_reader m_tic_reader;
@@ -53,6 +57,8 @@ void preHwInit(void) {
     pinMode(CONFIG_LED_TIC_RED_PIN, OUTPUT);
     digitalWrite(CONFIG_LED_TIC_GREEN_PIN, LOW);
     digitalWrite(CONFIG_LED_TIC_RED_PIN, LOW);
+    // Serial
+    pinMode(CONFIG_TIC_DATA_PIN, INPUT);
 }
 
 /**
@@ -65,7 +71,6 @@ void setup(void) {
     Serial.begin(115200);
     /* Setup tic reader */
     m_tic_reader.setup(m_tic_port);
-
     /* Return */
     Serial.println(" [i] Setup done.");
 }
@@ -268,7 +273,8 @@ void loop(void) {
 
     /* Tic reading task */
     {
-        static uint32_t timestamp = 0;
+        static uint32_t refresh = millis() + PERIOD;
+        uint32_t now;
         static char serial_[12 + 1];
         static uint8_t current_ = 0;
         static uint16_t voltage_  = 0;
@@ -287,7 +293,6 @@ void loop(void) {
 
             case STATE_0: {
                 m_tic_port.end();
-                pinMode(CONFIG_TIC_DATA_PIN, INPUT);
                 Serial.println("Reset Port");
                 m_tic_port.begin(9600);
                 m_tic_sm = STATE_1;
@@ -307,24 +312,14 @@ void loop(void) {
                     break;
                 }
 
-                Serial.printf(" [d] Received dataset %s = %s\r\n", dataset.name, dataset.data);
+                Serial.printf(" [d] %s = %s\r\n", dataset.name, dataset.data);
                 m_tic_state = STATE_VALID;
-                // force refresh every 30 minutes
-                if( millis() - timestamp >= 1800000) {
-                  timestamp = millis();
+                // force refresh every PERIOD
+                // only for mostly static values
+                now = millis();
+                if(now > refresh) {
+                  refresh = now + PERIOD;
                   serial_[0] = '\0';
-                  current_ = 0;
-                  voltage_  = 0;
-                  ap_ = 0;
-                  power_ = 0;
-                  powerlh_ = 0;
-                  apmax_ = 0;
-                  apin_ = 65535;
-                  apinmax_ = 65535;
-                }
-                // handle millis overflow
-                if(timestamp >= (4294967295 - 1800000)) {
-                  timestamp += 1800000;
                 }
 
                 /* Serial */
