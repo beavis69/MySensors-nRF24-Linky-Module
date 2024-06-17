@@ -13,18 +13,27 @@
 #endif
 
 // datasets we want
-                    // S_INFO       (V_TEXT)    ADSC
-                    // S_MULTIMETER (V_CURRENT) IRMS1
-                    // S_MULTIMETER (V_CURRENT) URMS1
-                    // S_POWER      (V_WATT)    SINSTS
-                    // S_POWER      (V_KWH)     EAST
-const uint8_t nb_wanted = 5;
+// S_INFO       (V_TEXT)    ADSC   : Serial
+// S_MULTIMETER (V_CURRENT) IRMS1  : Current
+// S_MULTIMETER (V_CURRENT) URMS1  : Voltage
+// S_POWER      (V_VA)      SINSTS : Apparent Power
+// S_POWER      (V_KWH)     EAST   : Energy Total
+// S_POWER      (V_KWH)     CCASN  : Energy last hour
+// S_POWER      (V_VA)      SMAXSN : Apparent Power Max
+// S_POWER      (V_VA)      SINSTI : Apparent Power Injected
+// S_POWER      (V_VA)      SMAXSI : Apparent Power Injected Max
+
+const uint8_t nb_wanted = 9;
 const char* wanted[nb_wanted] {
   "ADSC",
   "IRMS1",
   "URMS1",
   "SINSTS",
   "EAST",
+  "CCASN",
+  "SMAXSN",
+  "SINSTI",
+  "SMAXSI",
 };
 
 /**

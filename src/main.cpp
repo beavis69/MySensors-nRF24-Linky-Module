@@ -21,12 +21,25 @@ static enum {
 } m_tic_state;
 
 /* List of virtual sensors */
+// S_INFO       (V_TEXT)    ADSC   : Serial
+// S_MULTIMETER (V_CURRENT) IRMS1  : Current
+// S_MULTIMETER (V_CURRENT) URMS1  : Voltage
+// S_POWER      (V_VA)      SINSTS : Apparent Power
+// S_POWER      (V_KWH)     EAST   : Energy Total
+// S_POWER      (V_KWH)     CCASN  : Energy last hour
+// S_POWER      (V_VA)      SMAXSN : Apparent Power Max
+// S_POWER      (V_VA)      SINSTI : Apparent Power Injected
+// S_POWER      (V_VA)      SMAXSI : Apparent Power Injected Max
 enum {
-    SENSOR_0_SERIAL,         // S_INFO       (V_TEXT)    ADSC
-    SENSOR_1_CURRENT,        // S_MULTIMETER (V_CURRENT) IRMS1
-    SENSOR_2_VOLTAGE,        // S_MULTIMETER (V_CURRENT) URMS1
-    SENSOR_3_POWER,          // S_POWER      (V_WATT)    SINSTS
-    SENSOR_4_TOTAL,          // S_POWER      (V_KWH)     EAST
+    SENSOR_0_SERIAL,
+    SENSOR_1_CURRENT,
+    SENSOR_2_VOLTAGE,
+    SENSOR_3_POWER,
+    SENSOR_4_TOTAL,
+    SENSOR_5_LAST_H,
+    SENSOR_6_POWER_MAX,
+    SENSOR_7_POWER_IN,
+    SENSOR_8_POWER_IN_MAX,
 };
 
 /**
@@ -104,6 +117,30 @@ void presentation(void) {
             }
             case SENSOR_4_TOTAL: {
                 if (present(SENSOR_4_TOTAL, S_POWER, F("TIC Energy Total")) == true) {  // V_KWH EAST
+                    step++;
+                }
+                break;
+            }
+            case SENSOR_5_LAST_H: {
+                if (present(SENSOR_4_TOTAL, S_POWER, F("TIC Energy last hour")) == true) {  // V_KWH CCASN
+                    step++;
+                }
+                break;
+            }
+            case SENSOR_6_POWER_MAX: {
+                if (present(SENSOR_4_TOTAL, S_POWER, F("TIC Apparent Power Max")) == true) {  // V_VA SMAXSN
+                    step++;
+                }
+                break;
+            }
+            case SENSOR_7_POWER_IN: {
+                if (present(SENSOR_4_TOTAL, S_POWER, F("TIC Apparent Power Injected")) == true) {  // V_VA SINSTI
+                    step++;
+                }
+                break;
+            }
+            case SENSOR_8_POWER_IN_MAX: {
+                if (present(SENSOR_4_TOTAL, S_POWER, F("TIC Apparent Power Injected Max")) == true) {  // V_VA SMAXSI
                     step++;
                 }
                 break;
@@ -247,7 +284,6 @@ void loop(void) {
             }
 
             case STATE_1: {
-
                 /* Read incoming datasets */
                 struct tic_dataset dataset = {0};
                 res = m_tic_reader.read(dataset);
@@ -263,7 +299,7 @@ void loop(void) {
                 Serial.printf(" [d] Received dataset %s = %s\r\n", dataset.name, dataset.data);
                 m_tic_state = STATE_VALID;
 
-                /* Numéro de Série */
+                /* Serial */
                 if (strcmp_P(dataset.name, PSTR("ADSC")) == 0) {
                     static char serial_[12 + 1];
                     if (strcmp(dataset.data, serial_) != 0) {
@@ -274,7 +310,7 @@ void loop(void) {
                     }
                 }
 
-                /* Intensité Phase 1 */
+                /* Current */
                 else if (strcmp_P(dataset.name, PSTR("IRMS1")) == 0) {
                     static uint8_t current_ = 0;
                     uint8_t value = strtoul(dataset.data, NULL, 10);
@@ -286,7 +322,7 @@ void loop(void) {
                     }
                 }
 
-                /* Tension Phase 1 */
+                /* Voltage */
                 else if (strcmp_P(dataset.name, PSTR("URMS1")) == 0) {
                     static uint16_t voltage_  = 0;
                     uint16_t value = strtoul(dataset.data, NULL, 10);
@@ -298,18 +334,18 @@ void loop(void) {
                     }
                 }
 
-                /* Puissance apparente */
+                /* Apparent Power */
                 else if (strcmp_P(dataset.name, PSTR("SINSTS")) == 0) {
-                    static uint32_t pa_ = 0;
-                    uint32_t value = strtoul(dataset.data, NULL, 10);
-                    if (value != pa_) {
+                    static uint16_t ap_ = 0;
+                    uint16_t value = strtoul(dataset.data, NULL, 10);
+                    if (value != ap_) {
                         MyMessage message(SENSOR_3_POWER, V_VA);
                         if (send(message.set(value)) == true) {
-                            pa_ = value;
+                            ap_ = value;
                         }
                     }
                 }
-                /* Option Base, index TH */
+                /* Energy total */
                 else if (strcmp_P(dataset.name, PSTR("EAST")) == 0) {
                     static uint32_t power_ = 0;
                     uint32_t value = strtoul(dataset.data, NULL, 10);
@@ -317,6 +353,50 @@ void loop(void) {
                         MyMessage message(SENSOR_4_TOTAL, V_KWH);
                         if (send(message.set(value / 1000.0, 3)) == true) {
                             power_ = value;
+                        }
+                    }
+                }
+                /* Energy last hour */
+                else if (strcmp_P(dataset.name, PSTR("CCASN")) == 0) {
+                    static uint16_t powerlh_ = 0;
+                    uint16_t value = strtoul(dataset.data, NULL, 10);
+                    if (value > powerlh_) {
+                        MyMessage message(SENSOR_5_LAST_H, V_KWH);
+                        if (send(message.set(value / 1000.0, 3)) == true) {
+                            powerlh_ = value;
+                        }
+                    }
+                }
+                /* Apparent Power Max */
+                else if (strcmp_P(dataset.name, PSTR("SMAXSN")) == 0) {
+                    static uint16_t apmax_ = 0;
+                    uint16_t value = strtoul(dataset.data, NULL, 10);
+                    if (value != apmax_) {
+                        MyMessage message(SENSOR_6_POWER_MAX, V_VA);
+                        if (send(message.set(value)) == true) {
+                            apmax_ = value;
+                        }
+                    }
+                }
+                /* Apparent Power Injected */
+                else if (strcmp_P(dataset.name, PSTR("SINSTI")) == 0) {
+                    static uint16_t apin_ = 0;
+                    uint16_t value = strtoul(dataset.data, NULL, 10);
+                    if (value != apin_) {
+                        MyMessage message(SENSOR_7_POWER_IN, V_VA);
+                        if (send(message.set(value)) == true) {
+                            apin_ = value;
+                        }
+                    }
+                }
+                /* Apparent Power Injected Max */
+                else if (strcmp_P(dataset.name, PSTR("SMAXSI")) == 0) {
+                    static uint16_t apinmax_ = 0;
+                    uint16_t value = strtoul(dataset.data, NULL, 10);
+                    if (value != apinmax_) {
+                        MyMessage message(SENSOR_8_POWER_IN_MAX, V_VA);
+                        if (send(message.set(value)) == true) {
+                            apinmax_ = value;
                         }
                     }
                 }

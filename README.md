@@ -8,12 +8,15 @@ I works only for Linky *standard tic at 9600b/s*
 
 It only reports the following data :
 
-*    SENSOR_0_SERIAL,         // S_INFO       (V_TEXT)    ADSC
-*    SENSOR_1_CURRENT,        // S_MULTIMETER (V_CURRENT) IRMS1
-*    SENSOR_2_VOLTAGE,        // S_MULTIMETER (V_CURRENT) URMS1
-*    SENSOR_3_POWER,          // S_POWER      (V_WATT)    SINSTS
-*    SENSOR_4_TOTAL,          // S_POWER      (V_KWH)     EAST
-
+* S_INFO       (V_TEXT)    ADSC   : Serial
+* S_MULTIMETER (V_CURRENT) IRMS1  : Current
+* S_MULTIMETER (V_CURRENT) URMS1  : Voltage
+* S_POWER      (V_VA)      SINSTS : Apparent Power
+* S_POWER      (V_KWH)     EAST   : Energy Total
+* S_POWER      (V_KWH)     CCASN  : Energy last hour
+* S_POWER      (V_VA)      SMAXSN : Apparent Power Max
+* S_POWER      (V_VA)      SINSTI : Apparent Power Injected
+* S_POWER      (V_VA)      SMAXSI : Apparent Power Injected Max
 
 Some notes :
 * use less ram (discarding unused dataset)
