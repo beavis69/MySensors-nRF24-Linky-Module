@@ -13,7 +13,7 @@
 
 
 // define force refresh period
-#define PERIOD 1800000
+#define PERIOD (1000UL*60*60*1)
 
 /* Working variables */
 static SoftwareSerial m_tic_port(CONFIG_TIC_DATA_PIN, CONFIG_TIC_DUMMY_PIN);
@@ -59,6 +59,12 @@ void preHwInit(void) {
     digitalWrite(CONFIG_LED_TIC_RED_PIN, LOW);
     // Serial
     pinMode(CONFIG_TIC_DATA_PIN, INPUT);
+}
+
+/* use 8s watchdog */
+void before() {
+  wdt_disable();
+  wdt_enable(WDTO_8S);
 }
 
 /**
@@ -157,7 +163,7 @@ void presentation(void) {
 
         /* Sleep a little bit after each presentation, otherwise the next fails
          * @see https://forum.mysensors.org/topic/4450/sensor-presentation-failure */
-        sleep(50);
+        wait(200);
     }
 }
 
@@ -176,6 +182,15 @@ void receive(const MyMessage &message) {
 void loop(void) {
     int res;
 
+    /* reset watchdog */
+    wdt_reset();
+
+    /* check if connected */
+    if(!isTransportReady()){
+      Serial.println("No Gateway, rebooting in 5s !");
+      wait(5000);
+      asm volatile("jmp 0x00");
+    }
 
     /* Led task */
     /*
