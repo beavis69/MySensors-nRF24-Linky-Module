@@ -145,13 +145,13 @@ void presentation(void) {
                 break;
             }
             case SENSOR_7_POWER_IN: {
-                if (present(SENSOR_7_POWER_IN, S_POWER, F("TIC Apparent Power Injected")) == true) {  // V_VA SINSTI
+                if (present(SENSOR_7_POWER_IN, S_POWER, F("TIC Power Injected")) == true) {  // V_VA SINSTI
                     step++;
                 }
                 break;
             }
             case SENSOR_8_POWER_IN_MAX: {
-                if (present(SENSOR_8_POWER_IN_MAX, S_POWER, F("TIC Apparent Power Injected Max")) == true) {  // V_VA SMAXSI
+                if (present(SENSOR_8_POWER_IN_MAX, S_POWER, F("TIC Power Injected Max")) == true) {  // V_VA SMAXSI
                     step++;
                 }
                 break;
@@ -182,15 +182,15 @@ void receive(const MyMessage &message) {
 void loop(void) {
     int res;
 
-    /* reset watchdog */
-    wdt_reset();
 
     /* check if connected */
+    /*
     if(!isTransportReady()){
       Serial.println("No Gateway, rebooting in 5s !");
       wait(5000);
       asm volatile("jmp 0x00");
     }
+    */
 
     /* Led task */
     /*
