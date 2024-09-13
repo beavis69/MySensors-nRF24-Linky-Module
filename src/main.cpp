@@ -14,6 +14,7 @@
 
 // define force refresh period
 #define PERIOD (1000UL*60*60*1)
+#define REBOOTC (1000UL*60*9)
 
 /* Working variables */
 static SoftwareSerial m_tic_port(CONFIG_TIC_DATA_PIN, CONFIG_TIC_DUMMY_PIN);
@@ -72,7 +73,6 @@ void before() {
  * Called once MySensors has successfully initialized.
  */
 void setup(void) {
-
     /* Setup serial port to computer */
     Serial.begin(115200);
     /* Setup tic reader */
@@ -163,7 +163,7 @@ void presentation(void) {
 
         /* Sleep a little bit after each presentation, otherwise the next fails
          * @see https://forum.mysensors.org/topic/4450/sensor-presentation-failure */
-        wait(200);
+        wait(250);
     }
 }
 
@@ -181,16 +181,21 @@ void receive(const MyMessage &message) {
  */
 void loop(void) {
     int res;
+    uint32_t now;
+    static uint32_t rebootc = millis() + REBOOTC;
 
+    now = millis();
 
     /* check if connected */
-    /*
     if(!isTransportReady()){
-      Serial.println("No Gateway, rebooting in 5s !");
-      wait(5000);
-      asm volatile("jmp 0x00");
+      if(now > rebootc) {
+        Serial.println("No Gateway, rebooting...");
+        asm volatile("jmp 0x00");
+      }
+    } else {
+      /* connected ! reset reboot */
+      rebootc = now + REBOOTC;
     }
-    */
 
     /* Led task */
     /*
@@ -392,7 +397,7 @@ void loop(void) {
                 /* Energy last hour */
                 else if (strcmp_P(dataset.name, PSTR("CCASN")) == 0) {
                     uint16_t value = strtoul(dataset.data, NULL, 10);
-                    if (value > powerlh_) {
+                    if (value != powerlh_) {
                         MyMessage message(SENSOR_5_LAST_H, V_KWH);
                         if (send(message.set(value / 1000.0, 3)) == true) {
                             powerlh_ = value;
