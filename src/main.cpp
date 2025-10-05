@@ -14,7 +14,7 @@
 
 // define force refresh period
 #define PERIOD (1000UL*60*60*1)
-#define REBOOTC (1000UL*60*9)
+#define REBOOTC (1000UL*60*5)
 
 /* Working variables */
 static SoftwareSerial m_tic_port(CONFIG_TIC_DATA_PIN, CONFIG_TIC_DUMMY_PIN);
